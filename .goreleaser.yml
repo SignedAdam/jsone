@@ -1,0 +1,49 @@
+version: 2
+
+builds:
+  - main: .
+    binary: jsone
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - format: tar.gz
+    name_template: "jsone_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+brews:
+  - repository:
+      owner: SignedAdam
+      name: homebrew-tap
+    name: jsone
+    homepage: "https://github.com/SignedAdam/jsone"
+    description: "Pipe anything in, get structured JSON out. Uses an LLM to turn any text into JSON."
+    license: "MIT"
+    install: |
+      bin.install "jsone"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  github:
+    owner: SignedAdam
+    name: jsone
