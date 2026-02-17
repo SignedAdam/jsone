@@ -1,7 +1,9 @@
 <p align="center">
   <h1 align="center">jsone</h1>
-  <p align="center"><strong>Pipe anything, get JSON.</strong></p>
+  <p align="center"><strong>Pipe anything in, get structured JSON out.</strong></p>
+  <p align="center">A CLI that uses an LLM to turn any text into structured JSON. Like jq, but for data that doesn't have a schema yet.</p>
   <p align="center">
+    <a href="#try-it-now">Try it</a> · 
     <a href="#install">Install</a> · 
     <a href="#examples">Examples</a> · 
     <a href="#how-it-works">How it works</a> · 
@@ -10,8 +12,6 @@
 </p>
 
 ---
-
-`jsone` is a CLI tool that reads stdin and outputs structured JSON. It uses a fast LLM (Gemini Flash) to infer structure from any text input -- tables, logs, config files, grep output, whatever.
 
 ```bash
 cat /etc/hosts | jsone
@@ -23,15 +23,41 @@ cat /etc/hosts | jsone
 ]
 ```
 
-Zero config to start. Sub-second for small inputs. Built for shell pipelines.
+No regex. No parsing code. No schema definition. Just pipe and go.
+
+## Try it now
+
+No API key needed:
+
+```bash
+jsone --demo
+```
+
+This runs 4 interactive examples showing real transformations -- hosts files, docker output, log grouping, grep extraction -- with zero setup.
+
+Ready to use it for real? Get a free Gemini API key in 30 seconds at [ai.google.dev/aistudio](https://ai.google.dev/aistudio), then:
+
+```bash
+export GEMINI_API_KEY="your-key"
+```
 
 ## Install
 
-### Go install (recommended)
+### Homebrew (macOS/Linux)
+
+```bash
+brew install SignedAdam/tap/jsone
+```
+
+### Go install
 
 ```bash
 go install github.com/SignedAdam/jsone@latest
 ```
+
+### Binary download
+
+Grab a pre-built binary from [Releases](https://github.com/SignedAdam/jsone/releases) for your platform (macOS, Linux, Windows -- amd64/arm64).
 
 ### From source
 
@@ -39,30 +65,15 @@ go install github.com/SignedAdam/jsone@latest
 git clone https://github.com/SignedAdam/jsone.git
 cd jsone
 go build -o jsone .
-mv jsone /usr/local/bin/
 ```
-
-### Set your API key
-
-```bash
-# Option 1: Gemini API (fastest, free tier available)
-export GEMINI_API_KEY="your-key-here"
-
-# Option 2: Dedicated jsone key (same as Gemini, just namespaced)
-export JSONE_API_KEY="your-key-here"
-
-# Option 3: OpenRouter (supports many models, slightly slower)
-export OPENROUTER_API_KEY="your-key-here"
-```
-
-Get a free Gemini API key in 30 seconds at [ai.google.dev](https://ai.google.dev).
 
 ## Examples
 
 ### Auto-detect structure (no args)
 
+jsone looks at your input and figures out the obvious structure:
+
 ```bash
-# Hosts file
 cat /etc/hosts | jsone
 ```
 ```json
@@ -70,7 +81,6 @@ cat /etc/hosts | jsone
 ```
 
 ```bash
-# Any table output
 docker ps | jsone
 ```
 ```json
@@ -78,17 +88,15 @@ docker ps | jsone
 ```
 
 ```bash
-# Key-value configs
 cat /etc/os-release | jsone
 ```
 ```json
 {"name": "Ubuntu", "version": "22.04", "id": "ubuntu", ...}
 ```
 
-### Guided extraction (positional arg)
+### Guided extraction (just tell it what you want)
 
 ```bash
-# Group and count
 cat access.log | jsone "group by status code"
 ```
 ```json
@@ -96,18 +104,16 @@ cat access.log | jsone "group by status code"
 ```
 
 ```bash
-# Extract specific fields
-grep -r TODO . | jsone "file, line, text"
+grep -rn TODO . | jsone "file, line, text"
 ```
 ```json
 [
-  {"file": "./main.go", "line": 42, "text": "TODO: add validation"},
-  {"file": "./llm.go", "line": 15, "text": "TODO: retry logic"}
+  {"file": "main.go", "line": 42, "text": "add validation"},
+  {"file": "llm.go", "line": 15, "text": "retry logic"}
 ]
 ```
 
 ```bash
-# Natural language instructions
 ps aux | jsone "top 5 by memory usage, include pid and command"
 ```
 ```json
@@ -117,18 +123,27 @@ ps aux | jsone "top 5 by memory usage, include pid and command"
 ]
 ```
 
-### Pipeline composition
+### Works great with jq
+
+jsone turns unstructured data into JSON. jq processes structured JSON. They're complementary:
 
 ```bash
-# Chain with jq
 docker ps | jsone | jq '.[] | select(.status | contains("Up"))'
-
-# Compact output for piping
-cat data.csv | jsone --raw | jq '.[] | select(.active == true)'
-
-# Feed into other tools
 kubectl get pods | jsone | jq -r '.[].name' | xargs kubectl describe pod
+cat data.csv | jsone --raw | jq '.[] | select(.active == true)'
 ```
+
+## How is this different from jq?
+
+| | jq | jsone |
+|---|---|---|
+| **Input** | Must be valid JSON | Anything (logs, tables, configs, prose) |
+| **Schema** | You define the structure | LLM infers the structure |
+| **Offline** | Yes | No (needs API) |
+| **Speed** | Instant | Sub-second (API call) |
+| **Use case** | Transform JSON | Create JSON from non-JSON |
+
+They solve different problems. Use jsone to get your data into JSON, then jq to work with it.
 
 ## Usage
 
@@ -138,76 +153,55 @@ command | jsone [instruction] [flags]
 
 | Flag | Description |
 |------|-------------|
+| `--demo` | Run interactive demo, no API key needed |
 | `--model MODEL` | Override LLM model (default: `gemini-2.0-flash`) |
 | `--raw` | Compact JSON, no pretty-printing |
 | `--version` | Print version |
 | `--help` | Show help |
 
-### API key resolution order
+### API key resolution
 
 1. `JSONE_API_KEY` -- Gemini API (preferred)
 2. `GEMINI_API_KEY` -- Gemini API (fallback)
-3. `OPENROUTER_API_KEY` -- OpenRouter (any model)
+3. `OPENROUTER_API_KEY` -- OpenRouter (any model, slightly slower)
 
 ## How it works
 
-1. Reads all of stdin into a buffer (up to 100KB; truncates with a warning)
+1. Reads stdin (up to 100KB, truncates with warning)
 2. Sends to Gemini Flash with `response_mime_type: application/json` (native JSON mode -- guaranteed valid output)
 3. Pretty-prints to stdout
 
-No prompt engineering for JSON validity. Gemini's structured output mode handles that natively.
+No prompt engineering for JSON validity. Gemini's structured output mode handles that natively. One API call per invocation.
 
 ## For AI agents
 
-`jsone` is designed to be used by AI agents in shell pipelines. Key properties:
+jsone is designed to work in automated pipelines. Key properties:
 
-- **Deterministic interface.** stdin in, JSON stdout, errors on stderr. Exit code 0 on success, 1 on failure.
-- **Structured errors.** All errors go to stderr with a `jsone:` prefix. stdout is always either valid JSON or empty.
-- **Composable.** Chain with `jq`, `fx`, or any JSON tool. Use `--raw` for compact output in pipes.
-- **No interactive prompts.** Fully non-interactive. Safe for automation.
-- **Idempotent.** Same input + same instruction = same structure (content may vary slightly due to LLM, but schema is stable).
-- **Fast enough for scripting.** Sub-second with Gemini Flash for inputs under 10KB. Not suitable for tight loops (each call is an API request).
+- **Deterministic interface.** stdin in, JSON stdout, errors on stderr. Exit 0 on success, 1 on failure.
+- **Structured errors.** All errors go to stderr with a `jsone:` prefix. stdout is always valid JSON or empty.
+- **Composable.** Chain with jq, fx, or any JSON tool. Use `--raw` for compact output.
+- **Non-interactive.** No prompts, no confirmations. Safe for automation.
+- **Stable schema.** Same input + same instruction = same JSON structure across calls.
 
-### Agent usage patterns
+### Cost
 
-```bash
-# Parse command output into structured data for decision-making
-docker ps | jsone --raw  # feed into your context
-
-# Extract actionable items from logs
-journalctl --since "1 hour ago" | jsone "errors only, with timestamp and message" --raw
-
-# Convert human-readable output to machine-parseable
-git log --oneline -10 | jsone "hash, message" --raw
-```
-
-### Cost awareness
-
-Each invocation makes one LLM API call. Gemini Flash pricing is very low (~$0.0001 per typical call), but avoid using jsone in tight loops over thousands of items. Batch your input instead:
+Each call is one Gemini Flash API request (~$0.0001). Don't use in tight loops -- batch your input instead:
 
 ```bash
 # Good: one call
 find . -name "*.go" -exec grep -l TODO {} \; | jsone
 
-# Bad: many calls
+# Bad: N calls
 find . -name "*.go" | while read f; do grep TODO "$f" | jsone; done
 ```
-
-## Supported backends
-
-| Backend | Env var | JSON mode | Speed |
-|---------|---------|-----------|-------|
-| Gemini (direct) | `GEMINI_API_KEY` | Native (`response_mime_type`) | Fastest |
-| OpenRouter | `OPENROUTER_API_KEY` | `json_object` format | +~1s latency |
 
 ## Roadmap
 
 - [ ] `--schema FILE` -- enforce output against a JSON Schema
-- [ ] `~/.config/jsone/config.json` -- persistent config
+- [ ] `~/.config/jsone/config.json` -- persistent API key config
 - [ ] Shell completions (bash, zsh, fish)
-- [ ] `-o yaml` / `-o csv` output formats
 - [ ] Streaming for large inputs
 
 ## License
 
-MIT
+[MIT](LICENSE)
