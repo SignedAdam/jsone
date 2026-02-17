@@ -9,7 +9,7 @@ import (
 
 const (
 	maxInputBytes = 100 * 1024 // 100KB
-	version       = "0.1.0"
+	version       = "0.2.0"
 )
 
 func main() {
@@ -19,6 +19,7 @@ func main() {
 	var raw bool
 	var showHelp bool
 	var showVersion bool
+	var showDemo bool
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
@@ -27,6 +28,8 @@ func main() {
 			showHelp = true
 		case "--version", "-v":
 			showVersion = true
+		case "--demo":
+			showDemo = true
 		case "--raw":
 			raw = true
 		case "--model":
@@ -55,6 +58,11 @@ func main() {
 
 	if showHelp {
 		printUsage()
+		os.Exit(0)
+	}
+
+	if showDemo {
+		runDemo()
 		os.Exit(0)
 	}
 
@@ -141,6 +149,7 @@ Arguments:
 Flags:
   --model MODEL  Override LLM model (default: gemini-2.0-flash)
   --raw          Compact JSON output (no pretty-printing)
+  --demo         Run interactive demo (no API key needed)
   --version      Show version
   --help         Show this help
 
